@@ -25,13 +25,14 @@ object build extends Build {
          ++ uniform.ghsettings
          ++ Seq[  Sett](
           libraryDependencies ++= Seq(
+                "au.com.cba.omnia" %% "permafrost"       % "0.1.0-20141203052129-fbfcb09",
                 "com.twitter"       % "parquet-common"   % parquetVersion       % "provided",
                 "com.twitter"       % "parquet-encoding" % parquetVersion       % "provided",
                 "com.twitter"       % "parquet-column"   % parquetVersion       % "provided",
                 "com.twitter"       % "parquet-hadoop"   % parquetVersion       % "provided",
                 "org.apache.hadoop" % "hadoop-client"    % "2.0.0-mr1-cdh4.6.0" % "provided",
                 "org.apache.hadoop" % "hadoop-core"      % "2.0.0-mr1-cdh4.6.0" % "provided",
-                "org.rogach"       %% "scallop"          % "0.9.5" 
+                "org.rogach"       %% "scallop"          % "0.9.5"
              )
          )
   )

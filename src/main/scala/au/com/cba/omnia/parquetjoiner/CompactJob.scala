@@ -24,9 +24,11 @@ import parquet.hadoop.{BadConfigurationException,ParquetOutputFormat}
 import parquet.hadoop.api.WriteSupport
 import parquet.hadoop.example.GroupWriteSupport
 
+import au.com.cba.omnia.permafrost.hdfs.Hdfs
+
 class ParquetCompactConf(arguments: Seq[String]) extends ScallopConf(arguments) {
-  val inputPath  = opt[String](required = true)
-  val outputPath = opt[String](required = true)
+  val input      = opt[String](required = true)
+  val output     = opt[String](required = true)
   val count      = opt[Int](required = false, default = Option(10))
 }
 
@@ -39,7 +41,7 @@ class ParquetCompactWriteSupport extends GroupWriteSupport {
   }
 
   def extractMetadata(configuration: Configuration) = {
-    val metadataJson = configuration.get(ParquetCompactWriteSupport.ExtraMetadataKey)
+    val metadataJson = configuration.get(ParquetCompactWriteSupport.extraMetadataKey)
     try {
       extraMetadata = new ObjectMapper().readValue(metadataJson, new TypeReference[java.util.Map[String,String]](){})
     } catch { case e: java.io.IOException =>
@@ -49,23 +51,25 @@ class ParquetCompactWriteSupport extends GroupWriteSupport {
 }
 
 object ParquetCompactWriteSupport {
-  val ExtraMetadataKey = "herringbone.compact.extrametadata" //Why do we need this?
-  val JoinFileCount    = "herringbone.compact.file.count"
+  val extraMetadataKey = "parquetjoiner.compact.extrametadata" //Why do we need this?
+  val joinFileIndex    = "parquetjoiner.compact.file.index"
+  val joinFileCount    = "parquetjoiner.compact.file.count"
+  val joinFileTotal    = "parquetjoiner.compact.file.total" // provided for sense-checking ... fail fast if number of footers changes
 }
 
-class CompactJob extends Configured with Tool {
-  override def run(arguments: Array[String]) = {
-    val args       = new ParquetCompactConf(arguments)
+class CompactJob(conf: ParquetCompactConf, index: Int, total: Int) extends Configured with Tool {
+  override def run(args: Array[String]) = {
     val fs         = FileSystem.get(getConf)
-    val inputPath  = new Path(args.inputPath())
-    val outputPath = new Path(args.outputPath())
-    val joinCount  = args.count() 
+    val inputPath  = new Path(conf.input())
+    val outputPath = new Path(conf.output())
 
     // Pass along metadata (which includes the thrift schema) to the results.
     val metadata = ParquetUtils.readKeyValueMetaData(inputPath, fs)
     val metadataJson = new ObjectMapper().writeValueAsString(metadata)
-    getConf.set(ParquetCompactWriteSupport.ExtraMetadataKey, metadataJson)
-    getConf.set(ParquetCompactWriteSupport.JoinFileCount, joinCount.toString)
+    getConf.set(ParquetCompactWriteSupport.extraMetadataKey, metadataJson)
+    getConf.set(ParquetCompactWriteSupport.joinFileIndex, conf.count().toString)
+    getConf.set(ParquetCompactWriteSupport.joinFileCount, index.toString)
+    getConf.set(ParquetCompactWriteSupport.joinFileTotal, total.toString)
 
     val job = new Job(getConf)
 
@@ -90,7 +94,14 @@ object CompactJob {
 
   def main(args: Array[String]) = {
     args.foreach(println(_))
-    val result = ToolRunner.run(new Configuration, new CompactJob, args.tail)
-    System.exit(result)
+    val conf = new ParquetCompactConf(args)
+
+    // dodgy, should be using configuration that takes args into account. Also should handle case where path is file
+    val numFiles = Hdfs.files(new Path(conf.input()), "*.parquet").run(new Configuration).toOption.getOrElse(throw new Exception("Cannot read input path")).length
+    val jobs = (0 to numFiles / conf.count()).map(i => new CompactJob(conf, i * conf.count(), numFiles))
+    jobs foreach (job => {
+      val result = ToolRunner.run(new Configuration, job, args.tail)
+      if (result != 0) { System.exit(result) }
+    })
   }
 }

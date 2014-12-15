@@ -84,9 +84,16 @@ class CompactInputFormat[T](readSupportClass: Class[_ <: ReadSupport[T]]) extend
 
   override def getFooters(configuration: Configuration, statuses: JavaList[FileStatus]): JavaList[Footer] = {
     println("reading " + statuses.length + " files");
-    val joinCount = configuration.get(ParquetCompactWriteSupport.JoinFileCount).toInt
-    val filesToJoin = if (joinCount < statuses.size) statuses.subList(0, joinCount) else statuses
-    return ParquetFileReader.readAllFootersInParallelUsingSummaryFiles(configuration, filesToJoin); 
+    val count = configuration.get(ParquetCompactWriteSupport.joinFileCount).toInt
+    val index = configuration.get(ParquetCompactWriteSupport.joinFileIndex).toInt
+    val total = configuration.get(ParquetCompactWriteSupport.joinFileTotal).toInt
+
+    if (statuses.length != total) {
+      throw new Exception("number of footers has changed. Expected ${total}, but got ${statuses.length}")
+    }
+    val filesToJoin = statuses.drop(index).take(count)
+
+    return ParquetFileReader.readAllFootersInParallelUsingSummaryFiles(configuration, filesToJoin);
   }
 }
 
