@@ -1,4 +1,4 @@
-au.com.cba.omnia.parquetjoiner
+package au.com.cba.omnia.parquetjoiner
 
 import org.apache.hadoop.conf._
 import org.apache.hadoop.util._
