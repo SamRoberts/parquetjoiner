@@ -57,7 +57,7 @@ object ParquetCompactWriteSupport {
   val joinFileTotal    = "parquetjoiner.compact.file.total" // provided for sense-checking ... fail fast if number of footers changes
 }
 
-class CompactJob(conf: ParquetCompactConf, index: Int, total: Int) extends Configured with Tool {
+case class CompactJob(conf: ParquetCompactConf, index: Int, total: Int) extends Configured with Tool {
   override def run(args: Array[String]) = {
     val fs         = FileSystem.get(getConf)
     val inputPath  = new Path(conf.input())
@@ -67,8 +67,8 @@ class CompactJob(conf: ParquetCompactConf, index: Int, total: Int) extends Confi
     val metadata = ParquetUtils.readKeyValueMetaData(inputPath, fs)
     val metadataJson = new ObjectMapper().writeValueAsString(metadata)
     getConf.set(ParquetCompactWriteSupport.extraMetadataKey, metadataJson)
-    getConf.set(ParquetCompactWriteSupport.joinFileIndex, conf.count().toString)
-    getConf.set(ParquetCompactWriteSupport.joinFileCount, index.toString)
+    getConf.set(ParquetCompactWriteSupport.joinFileIndex, index.toString)
+    getConf.set(ParquetCompactWriteSupport.joinFileCount, conf.count().toString)
     getConf.set(ParquetCompactWriteSupport.joinFileTotal, total.toString)
 
     val job = new Job(getConf)
@@ -98,9 +98,15 @@ object CompactJob {
 
     // dodgy, should be using configuration that takes args into account. Also should handle case where path is file
     val numFiles = Hdfs.files(new Path(conf.input()), "*.parquet").run(new Configuration).toOption.getOrElse(throw new Exception("Cannot read input path")).length
-    val jobs = (0 to numFiles / conf.count()).map(i => new CompactJob(conf, i * conf.count(), numFiles))
+    val jobs = (0 to numFiles / conf.count()).map(i => CompactJob(conf, i * conf.count(), numFiles))
     jobs foreach (job => {
+      println()
+      println("========== Running job ============")
+      println(job.conf)
+      println(s"index = ${job.index}")
+      println(s"total = ${job.total}")
       val result = ToolRunner.run(new Configuration, job, args.tail)
+      println(s"job result = $result")
       if (result != 0) { System.exit(result) }
     })
   }
