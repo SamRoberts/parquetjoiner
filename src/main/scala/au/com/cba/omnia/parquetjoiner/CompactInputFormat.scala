@@ -81,13 +81,6 @@ class CompactInputFormat[T](readSupportClass: Class[_ <: ReadSupport[T]]) extend
     else if (n < G) f"${n / M}%.2fM"
     else f"${n / G}%.2fG"
   }
-
-  override def getFooters(configuration: Configuration, statuses: JavaList[FileStatus]): JavaList[Footer] = {
-    println("reading " + statuses.length + " files");
-    val joinCount = configuration.get(ParquetCompactWriteSupport.JoinFileCount).toInt
-    val filesToJoin = if (joinCount < statuses.size) statuses.subList(0, joinCount) else statuses
-    return ParquetFileReader.readAllFootersInParallelUsingSummaryFiles(configuration, filesToJoin); 
-  }
 }
 
 class MergedInputSplit(var splits: List[ParquetInputSplit]) extends InputSplit with Writable {
@@ -163,6 +156,11 @@ class MergedRecordReader[T](split: MergedInputSplit,
         false
       }
     }
+  }
+
+  def getFooters(configuration: Configuration , statuses: List[FileStatus]): JavaList[Footer] = {
+    println("reading " + statuses.length + " files");
+    return ParquetFileReader.readAllFootersInParallelUsingSummaryFiles(configuration, statuses);
   }
 
   override def toString = "<MergedRecordReader>"

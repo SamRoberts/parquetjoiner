@@ -25,9 +25,8 @@ import parquet.hadoop.api.WriteSupport
 import parquet.hadoop.example.GroupWriteSupport
 
 class ParquetCompactConf(arguments: Seq[String]) extends ScallopConf(arguments) {
-  val inputPath  = opt[String](required = true)
+  val inputPath = opt[String](required = true)
   val outputPath = opt[String](required = true)
-  val count      = opt[Int](required = false, default = Option(10))
 }
 
 class ParquetCompactWriteSupport extends GroupWriteSupport {
@@ -49,23 +48,20 @@ class ParquetCompactWriteSupport extends GroupWriteSupport {
 }
 
 object ParquetCompactWriteSupport {
-  val ExtraMetadataKey = "herringbone.compact.extrametadata" //Why do we need this?
-  val JoinFileCount    = "herringbone.compact.file.count"
+  val ExtraMetadataKey = "herringbone.compact.extrametadata"
 }
 
 class CompactJob extends Configured with Tool {
   override def run(arguments: Array[String]) = {
-    val args       = new ParquetCompactConf(arguments)
-    val fs         = FileSystem.get(getConf)
-    val inputPath  = new Path(args.inputPath())
+    val args = new ParquetCompactConf(arguments)
+    val fs = FileSystem.get(getConf)
+    val inputPath = new Path(args.inputPath())
     val outputPath = new Path(args.outputPath())
-    val joinCount  = args.count() 
 
     // Pass along metadata (which includes the thrift schema) to the results.
     val metadata = ParquetUtils.readKeyValueMetaData(inputPath, fs)
     val metadataJson = new ObjectMapper().writeValueAsString(metadata)
     getConf.set(ParquetCompactWriteSupport.ExtraMetadataKey, metadataJson)
-    getConf.set(ParquetCompactWriteSupport.JoinFileCount, joinCount.toString)
 
     val job = new Job(getConf)
 
@@ -74,7 +70,7 @@ class CompactJob extends Configured with Tool {
     ParquetOutputFormat.setWriteSupportClass(job, classOf[ParquetCompactWriteSupport])
     GroupWriteSupport.setSchema(ParquetUtils.readSchema(inputPath, fs), job.getConfiguration)
 
-    job.setJobName("compacter")
+    job.setJobName("compact " + args.inputPath() + " → " + args.outputPath())
     job.setInputFormatClass(classOf[CompactGroupInputFormat]);
     job.setOutputFormatClass(classOf[ParquetOutputFormat[Group]])
     job.setMapperClass(classOf[Mapper[Void,Group,Void,Group]])
@@ -89,8 +85,7 @@ class CompactJob extends Configured with Tool {
 object CompactJob {
 
   def main(args: Array[String]) = {
-    args.foreach(println(_))
-    val result = ToolRunner.run(new Configuration, new CompactJob, args.tail)
+    val result = ToolRunner.run(new Configuration, new CompactJob, args)
     System.exit(result)
   }
 }
